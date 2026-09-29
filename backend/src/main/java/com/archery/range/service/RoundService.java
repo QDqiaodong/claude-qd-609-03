@@ -28,6 +28,9 @@ import com.archery.range.repository.RoundRepository;
  * 用 {@code @OneToMany + @JoinTable + @OrderColumn(name = "shot_index")} 映射成有序集合，
  * 于是「第几支箭」= 列表下标。记一支箭就是往列表尾部 append 后 save，
  * 顺序由 Hibernate 维护的 shot_index 保证，不会乱。
+ *
+ * 个人最好成绩按可比组别（会员 + 弓种 + 射距 + 规定箭数）独立计算，
+ * 判定口径统一收在 {@link PersonalBestSupport}，提交与历史修复共用同一套规则。
  */
 @Service
 public class RoundService {
@@ -81,7 +84,7 @@ public class RoundService {
             throw new BizException("一组只能是 6 支或 12 支箭");
         }
         String bowType = req.bowType() == null || req.bowType().isBlank()
-                ? "RECURVE"
+                ? PersonalBestSupport.DEFAULT_BOW_TYPE
                 : req.bowType().trim().toUpperCase();
         if (!RangeDict.isValidBowType(bowType)) {
             throw new BizException("弓种只能是 反曲弓 / 复合弓 / 传统弓");
@@ -93,6 +96,7 @@ public class RoundService {
         round.setLane(lane);
         round.setBowType(bowType);
         round.setStartTime(LocalDateTime.now());
+        round.setCompletedAt(null);
         round.setArrowCount(req.arrowCount());
         round.setTotalScore(0);
         round.setAverageScore(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
@@ -152,7 +156,10 @@ public class RoundService {
     }
 
     /**
-     * 提交回合：必须打满一组，提交时判定是否个人最好成绩。暂停态禁止提交。
+     * 提交回合：必须打满一组，提交时只与同一可比组别（会员 + 弓种 + 射距 + 箭数）的历史回合比较：
+     * 分数更高 → 本回合成为该组唯一个人最好并清除旧标记；同分 → 最早完成的回合保持最好。
+     * 组内判定走与历史修复完全相同的规则（{@link PersonalBestSupport}），重复提交 / 重算不会来回切换。
+     * 暂停态禁止提交。
      */
     @Transactional
     public RoundDtos.RoundDetailView submit(Long id) {
@@ -164,16 +171,35 @@ public class RoundService {
         if (round.getArrows().size() < round.getArrowCount()) {
             throw new BizException("还差 " + (round.getArrowCount() - round.getArrows().size()) + " 支箭未打完，不能提交");
         }
-        int historyBest = roundRepository
+
+        // 先落完成状态与完成时间；进行中 / 暂停回合永远没有完成时间，不能参与比较
+        LocalDateTime completedAt = LocalDateTime.now();
+        round.setCompletedAt(completedAt);
+        round.setStatus("SUBMITTED");
+
+        // 锁会员行：同一会员两个回合并发提交在此串行，避免同时把自己写成最好
+        memberRepository.findByIdForUpdate(round.getMember().getId()).orElseThrow();
+        // 先把状态变更刷入库，下面的 SUBMITTED 查询才能把本回合一并纳入同组重算
+        roundRepository.flush();
+
+        PersonalBestSupport.Eligibility eligibility = PersonalBestSupport.check(round);
+        if (!eligibility.eligible()) {
+            // 能提交的回合必然完整且组内对象齐备；保险起见保持无标记
+            round.setPersonalBest(false);
+            roundRepository.save(round);
+            return toDetail(round);
+        }
+
+        // 只取同一可比组别的已完成回合重算：新回合更高分则替换旧标记，同分保留最早完成者
+        List<Round> sameGroup = roundRepository
                 .findByMemberIdAndStatusOrderByStartTimeDesc(round.getMember().getId(), "SUBMITTED")
                 .stream()
-                .filter(item -> !item.getId().equals(round.getId()))
-                .mapToInt(item -> item.getTotalScore() == null ? 0 : item.getTotalScore())
-                .max()
-                .orElse(0);
-        round.setPersonalBest(round.getTotalScore() > historyBest);
-        round.setStatus("SUBMITTED");
-        return toDetail(roundRepository.save(round));
+                .filter(item -> PersonalBestSupport.check(item).eligible())
+                .filter(item -> PersonalBestSupport.check(item).key().equals(eligibility.key()))
+                .toList();
+        PersonalBestSupport.applyBestMarks(sameGroup);
+        roundRepository.saveAll(sameGroup);
+        return toDetail(round);
     }
 
     @Transactional(readOnly = true)
@@ -215,7 +241,20 @@ public class RoundService {
         return no;
     }
 
-    private RoundDtos.RoundView toView(Round round) {
+    /** Round → RoundView：带上可比组别与无法参与比较的明确原因，计分页 / 看板共用 */
+    public RoundDtos.RoundView toView(Round round) {
+        PersonalBestSupport.Eligibility eligibility = PersonalBestSupport.check(round);
+        RoundDtos.ComparableGroupView groupView = null;
+        if (eligibility.eligible()) {
+            PersonalBestSupport.GroupKey key = eligibility.key();
+            groupView = new RoundDtos.ComparableGroupView(
+                    key.memberId(),
+                    key.bowType(),
+                    RangeDict.bowTypeName(key.bowType()),
+                    key.distance(),
+                    key.arrowCount(),
+                    key.label());
+        }
         return new RoundDtos.RoundView(
                 round.getId(),
                 round.getRoundNo(),
@@ -228,13 +267,18 @@ public class RoundService {
                 round.getBowType(),
                 RangeDict.bowTypeName(round.getBowType()),
                 round.getStartTime(),
+                round.getCompletedAt(),
                 round.getArrowCount(),
                 round.getArrows().size(),
                 round.getTotalScore(),
                 round.getAverageScore(),
                 round.getPersonalBest(),
                 round.getStatus(),
-                RangeDict.roundStatusName(round.getStatus()));
+                RangeDict.roundStatusName(round.getStatus()),
+                eligibility.eligible(),
+                groupView,
+                eligibility.reasonCode(),
+                eligibility.reason());
     }
 
     private RoundDtos.RoundDetailView toDetail(Round round) {

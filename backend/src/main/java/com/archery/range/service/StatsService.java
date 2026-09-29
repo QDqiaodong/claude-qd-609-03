@@ -85,7 +85,7 @@ public class StatsService {
                 .sorted(Comparator.comparingInt((com.archery.range.domain.Round r) ->
                         r.getTotalScore() == null ? 0 : r.getTotalScore()).reversed())
                 .limit(5)
-                .map(this::toView)
+                .map(roundService::toView)
                 .toList();
 
         Map<String, Object> board = new LinkedHashMap<>();
@@ -95,27 +95,5 @@ public class StatsService {
         board.put("keypadRings", RangeDict.KEYPAD_RINGS);
         board.put("groupSizes", RangeDict.GROUP_SIZES);
         return board;
-    }
-
-    private RoundDtos.RoundView toView(com.archery.range.domain.Round round) {
-        return new RoundDtos.RoundView(
-                round.getId(),
-                round.getRoundNo(),
-                round.getMember() == null ? null : round.getMember().getId(),
-                round.getMember() == null ? "" : round.getMember().getName(),
-                round.getMember() == null ? "" : round.getMember().getCardNo(),
-                round.getLane() == null ? null : round.getLane().getId(),
-                round.getLane() == null ? "" : round.getLane().getLaneNo(),
-                round.getLane() == null ? null : round.getLane().getDistance(),
-                round.getBowType(),
-                RangeDict.bowTypeName(round.getBowType()),
-                round.getStartTime(),
-                round.getArrowCount(),
-                round.getArrows().size(),
-                round.getTotalScore(),
-                round.getAverageScore(),
-                round.getPersonalBest(),
-                round.getStatus(),
-                RangeDict.roundStatusName(round.getStatus()));
     }
 }

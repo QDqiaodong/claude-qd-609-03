@@ -104,11 +104,17 @@ public class MemberService {
     }
 
     private MemberDtos.MemberView toView(Member member) {
-        int best = roundRepository.findByMemberIdAndStatusOrderByStartTimeDesc(member.getId(), "SUBMITTED")
-                .stream()
-                .mapToInt(r -> r.getTotalScore() == null ? 0 : r.getTotalScore())
-                .max()
-                .orElse(0);
+        // 个人最好按可比组别（弓种 + 射距 + 箭数）各自独立，这里统计会员当前持有的最好条数；
+        // 不再跨组取一个最高总分（12 支组天然压过 6 支组）。
+        java.util.Set<com.archery.range.service.PersonalBestSupport.GroupKey> bestGroups = new java.util.HashSet<>();
+        for (com.archery.range.domain.Round r :
+                roundRepository.findByMemberIdAndStatusOrderByStartTimeDesc(member.getId(), "SUBMITTED")) {
+            com.archery.range.service.PersonalBestSupport.Eligibility check =
+                    com.archery.range.service.PersonalBestSupport.check(r);
+            if (check.eligible() && Boolean.TRUE.equals(r.getPersonalBest())) {
+                bestGroups.add(check.key());
+            }
+        }
         // 当前有效认证：已通过且未过期（撤回 / 被取代 / 过期均不计）
         int validCertCount = certApplicationRepository
                 .findByMemberIdAndStatusAndValidUntilGreaterThanEqualOrderByValidUntilDesc(
@@ -126,7 +132,7 @@ public class MemberService {
                 member.getTotalSpend(),
                 RangeDict.memberDiscount(member.getLevel()),
                 roundRepository.countByMemberId(member.getId()),
-                best,
+                bestGroups.size(),
                 validCertCount);
     }
 }

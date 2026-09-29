@@ -52,7 +52,12 @@ export const roundApi = {
   detail: (id) => http.get(`/rounds/${id}`),
   shoot: (id, ring) => http.post(`/rounds/${id}/shots`, { ring }),
   undo: (id) => http.post(`/rounds/${id}/undo`),
-  submit: (id) => http.post(`/rounds/${id}/submit`)
+  submit: (id) => http.post(`/rounds/${id}/submit`),
+  /** 会员各可比组别的个人最好 */
+  memberBests: (memberId) => http.get(`/members/${memberId}/personal-bests`),
+  /** 历史修复：预演（不落库）/ 执行（只改个人最好标记，可重复执行） */
+  previewRepair: () => http.get('/personal-bests/repair'),
+  repair: () => http.post('/personal-bests/repair')
 }
 
 /** 模块四：课程预约 */

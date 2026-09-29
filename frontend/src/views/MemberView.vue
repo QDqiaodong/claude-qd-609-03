@@ -39,10 +39,12 @@
             <span v-else class="muted">无</span>
           </template>
         </el-table-column>
-        <el-table-column label="回合 / 最好成绩" min-width="150">
+        <el-table-column label="回合 / 个人最好" min-width="170">
           <template #default="{ row }">
             {{ row.roundCount }} 个回合
-            <span v-if="row.bestScore" class="best">最高 {{ row.bestScore }} 环</span>
+            <el-button v-if="row.bestGroupCount > 0" link type="danger" @click="openBests(row)">
+              {{ row.bestGroupCount }} 组 PB
+            </el-button>
             <span v-else class="muted">暂无成绩</span>
           </template>
         </el-table-column>
@@ -86,6 +88,57 @@
         <el-button @click="rechargeVisible = false">取消</el-button>
         <el-button type="primary" @click="submitRecharge">确认充值</el-button>
       </template>
+    </el-dialog>
+
+    <!-- 个人最好：按可比组别（弓种 + 射距 + 箭数）各自独立，每组至多一条 -->
+    <el-dialog v-model="bestsVisible" :title="`个人最好成绩 · ${bestsPick ? bestsPick.name : ''}`" width="760px">
+      <div v-loading="bestsLoading">
+        <div class="rule-tip">
+          个人最好按可比组别独立计算：同一会员在同一弓种、同一射距、同一规定箭数内比较；
+          6 支与 12 支、不同弓种 / 射距互不影响。同分保留最早完成的回合。
+        </div>
+        <el-table :data="bestsData.groups || []" border>
+          <el-table-column label="可比组别" min-width="200">
+            <template #default="{ row }">
+              <el-tag size="small" effect="plain">{{ row.group.label }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="最好回合" width="150">
+            <template #default="{ row }">
+              <el-link type="primary" @click="openBestRound(row.bestRound.id)">
+                {{ row.bestRound.roundNo }}
+              </el-link>
+            </template>
+          </el-table-column>
+          <el-table-column label="完成时间" width="135">
+            <template #default="{ row }">{{ shortTime(row.bestRound.completedAt || row.bestRound.startTime) }}</template>
+          </el-table-column>
+          <el-table-column prop="roundCount" label="组内回合" width="80" />
+          <el-table-column label="总分" width="70">
+            <template #default="{ row }">
+              <b class="best-score">{{ row.bestRound.totalScore }}</b>
+            </template>
+          </el-table-column>
+          <el-table-column label="平均环" width="80">
+            <template #default="{ row }">{{ Number(row.bestRound.averageScore).toFixed(2) }}</template>
+          </el-table-column>
+        </el-table>
+
+        <!-- 打开某个最好回合：完整箭支明细仍按 shot_index 顺序呈现 -->
+        <div v-if="bestDetail" class="best-detail">
+          <div class="best-detail-head">
+            <b>{{ bestDetail.round.roundNo }}</b>
+            <el-tag size="small" type="danger" effect="dark">个人最好</el-tag>
+            <span class="muted">总分 {{ bestDetail.round.totalScore }} · 完整箭支明细</span>
+          </div>
+          <div class="best-shots">
+            <span v-for="arrow in bestDetail.arrows" :key="arrow.shotIndex" class="best-shot">
+              <em>第{{ arrow.shotIndex }}支</em>
+              <b>{{ arrow.ring }}</b>
+            </span>
+          </div>
+        </div>
+      </div>
     </el-dialog>
 
     <!-- 弓种能力认证：当前有效认证 + 历史记录 -->
@@ -140,7 +193,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { certApi, memberApi, money, shortDate } from '../api'
+import { certApi, memberApi, money, roundApi, shortDate, shortTime } from '../api'
 
 const members = ref([])
 const createVisible = ref(false)
@@ -152,6 +205,13 @@ const certPick = ref(null)
 const rechargeAmount = ref(200)
 const certData = ref({ current: [], history: [] })
 const createForm = reactive({ cardNo: '', name: '', phone: '', level: 'NORMAL', balance: 200 })
+
+// 个人最好（按可比组别）
+const bestsVisible = ref(false)
+const bestsLoading = ref(false)
+const bestsPick = ref(null)
+const bestsData = ref({ groups: [] })
+const bestDetail = ref(null)
 
 function levelType(level) {
   if (level === 'GOLD') return 'warning'
@@ -195,6 +255,23 @@ async function openCerts(row) {
   }
 }
 
+async function openBests(row) {
+  bestsPick.value = row
+  bestsData.value = { groups: [] }
+  bestDetail.value = null
+  bestsVisible.value = true
+  bestsLoading.value = true
+  try {
+    bestsData.value = await roundApi.memberBests(row.id)
+  } finally {
+    bestsLoading.value = false
+  }
+}
+
+async function openBestRound(id) {
+  bestDetail.value = await roundApi.detail(id)
+}
+
 async function submitRecharge() {
   await memberApi.recharge(pick.value.id, rechargeAmount.value)
   ElMessage.success('充值成功')
@@ -224,6 +301,55 @@ onMounted(loadMembers)
   margin-left: 6px;
   font-size: 12px;
   color: var(--el-color-primary);
+}
+
+.best-score {
+  color: #c62828;
+}
+
+.best-detail {
+  margin-top: 14px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fafcfc;
+}
+
+.best-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.best-shots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.best-shot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.best-shot em {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--ink-mute);
+}
+
+.best-shot b {
+  width: 34px;
+  height: 34px;
+  line-height: 34px;
+  text-align: center;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid var(--line);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .cert-section-title {

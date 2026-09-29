@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -39,4 +40,12 @@ public interface RoundRepository extends JpaRepository<Round, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from Round r where r.lane.id in :laneIds and r.status = 'ONGOING' order by r.id")
     List<Round> findOngoingByLaneIdsForUpdate(@Param("laneIds") List<Long> laneIds);
+
+    /**
+     * 历史修复：把指定回合上旧口径误置的最好标记清掉（只更新标记列，不触碰关联对象）。
+     * 不自动 flush：调用方保证在任何托管实体改动之前执行，避免缺失关联的损坏行被级联覆盖。
+     */
+    @Modifying
+    @Query("update Round r set r.personalBest = false where r.id in :ids and r.personalBest = true")
+    int clearPersonalBest(@Param("ids") List<Long> ids);
 }

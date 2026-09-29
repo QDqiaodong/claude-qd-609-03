@@ -40,7 +40,8 @@ public final class MemberDtos {
             BigDecimal totalSpend,
             BigDecimal discount,
             Long roundCount,
-            Integer bestScore,
+            /** 当前持有的个人最好条数（按可比组别：弓种 + 射距 + 箭数，每组至多一条） */
+            Integer bestGroupCount,
             Integer validCertCount) {
     }
 }

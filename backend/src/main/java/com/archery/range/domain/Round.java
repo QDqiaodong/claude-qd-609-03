@@ -19,6 +19,9 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 
+import org.hibernate.annotations.NotFound;
+import org.hibernate.annotations.NotFoundAction;
+
 /**
  * 计分回合：一组 6 支或 12 支箭。
  *
@@ -38,12 +41,19 @@ public class Round {
     @Column(name = "round_no", nullable = false, unique = true, length = 24)
     private String roundNo;
 
+    /**
+     * 关联会员 / 箭道用 @NotFound(IGNORE)：历史库里可能残留外键目标缺失的损坏回合，
+     * 这类记录必须能被加载并明确列为「无法参与比较」，而不是在加载整个回合列表时炸掉。
+     * 它们的原始成绩保留、不静默归入任何组（见 PersonalBestSupport.check）。
+     */
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "member_id", nullable = false)
+    @NotFound(action = NotFoundAction.IGNORE)
     private Member member;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "lane_id", nullable = false)
+    @NotFound(action = NotFoundAction.IGNORE)
     private Lane lane;
 
     /** 本回合使用弓种：RECURVE 反曲弓 / COMPOUND 复合弓 / TRADITIONAL 传统弓（认证证据字段） */
@@ -52,6 +62,10 @@ public class Round {
 
     @Column(name = "start_time", nullable = false)
     private LocalDateTime startTime;
+
+    /** 完成时间：提交那一刻落定；进行中 / 暂停回合为 NULL。同组同分平手时取它更早的回合为最好 */
+    @Column(name = "completed_at")
+    private LocalDateTime completedAt;
 
     /** 一组箭支数：6 或 12 */
     @Column(name = "arrow_count", nullable = false)
@@ -124,6 +138,14 @@ public class Round {
 
     public void setStartTime(LocalDateTime startTime) {
         this.startTime = startTime;
+    }
+
+    public LocalDateTime getCompletedAt() {
+        return completedAt;
+    }
+
+    public void setCompletedAt(LocalDateTime completedAt) {
+        this.completedAt = completedAt;
     }
 
     public Integer getArrowCount() {

@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS rounds (
   lane_id       BIGINT       NOT NULL,
   bow_type      VARCHAR(16)  NOT NULL DEFAULT 'RECURVE' COMMENT '本回合弓种：RECURVE 反曲弓 / COMPOUND 复合弓 / TRADITIONAL 传统弓',
   start_time    DATETIME     NOT NULL COMMENT '开始时间',
+  completed_at  DATETIME     NULL COMMENT '完成（提交）时间；个人最好成绩同分平手时按它取更早的回合',
   arrow_count   INT          NOT NULL COMMENT '本组箭支数：6 或 12',
   total_score   INT          NOT NULL COMMENT '总分',
   average_score DECIMAL(5,2) NOT NULL COMMENT '平均环',
@@ -228,20 +229,20 @@ INSERT INTO members (`id`, `card_no`, `name`, `phone`, `level`, `balance`, `regi
 INSERT INTO members (`id`, `card_no`, `name`, `phone`, `level`, `balance`, `register_date`, `total_spend`) VALUES (12, 'AR-2025-0012', '唐宁', '13800010012', 'NORMAL', 100.00, '2025-05-27', 180.00);
 
 -- rounds：13 行（bow_type 记录本回合使用弓种，是弓种认证的证据字段之一）
-INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (1, 'R20260915001', 1, 1, 'RECURVE', '2026-09-15 19:10:00', 6, 58, 9.67, 1, 'SUBMITTED');
-INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (2, 'R20260916001', 2, 3, 'TRADITIONAL', '2026-09-16 18:40:00', 6, 43, 7.17, 1, 'SUBMITTED');
-INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (3, 'R20260916002', 4, 6, 'COMPOUND', '2026-09-16 20:05:00', 12, 112, 9.33, 1, 'SUBMITTED');
-INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (4, 'R20260917001', 6, 4, 'RECURVE', '2026-09-17 19:30:00', 6, 45, 7.50, 1, 'SUBMITTED');
-INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (5, 'R20260918001', 8, 9, 'RECURVE', '2026-09-18 20:15:00', 12, 109, 9.08, 1, 'SUBMITTED');
-INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (6, 'R20260919001', 1, 10, 'RECURVE', '2026-09-19 19:00:00', 6, 58, 9.67, 0, 'SUBMITTED');
-INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (7, 'R20260920001', 9, 8, 'COMPOUND', '2026-09-20 18:20:00', 6, 37, 6.17, 1, 'SUBMITTED');
-INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (8, 'R20260920002', 11, 7, 'COMPOUND', '2026-09-20 20:30:00', 12, 104, 8.67, 1, 'SUBMITTED');
-INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (9, 'R20260921001', 4, 12, 'COMPOUND', '2026-09-21 19:45:00', 6, 59, 9.83, 0, 'SUBMITTED');
-INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (10, 'R20260922001', 3, 2, 'RECURVE', '2026-09-22 10:20:00', 6, 0, 0.00, 0, 'ONGOING');
-INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (11, 'R20260922002', 7, 7, 'COMPOUND', '2026-09-22 13:05:00', 12, 0, 0.00, 0, 'ONGOING');
-INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (12, 'R20260922003', 5, 8, 'RECURVE', '2026-09-22 15:40:00', 6, 0, 0.00, 0, 'ONGOING');
+INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `completed_at`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (1, 'R20260915001', 1, 1, 'RECURVE', '2026-09-15 19:10:00', '2026-09-15 19:10:00', 6, 58, 9.67, 1, 'SUBMITTED');
+INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `completed_at`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (2, 'R20260916001', 2, 3, 'TRADITIONAL', '2026-09-16 18:40:00', '2026-09-16 18:40:00', 6, 43, 7.17, 1, 'SUBMITTED');
+INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `completed_at`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (3, 'R20260916002', 4, 6, 'COMPOUND', '2026-09-16 20:05:00', '2026-09-16 20:05:00', 12, 112, 9.33, 1, 'SUBMITTED');
+INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `completed_at`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (4, 'R20260917001', 6, 4, 'RECURVE', '2026-09-17 19:30:00', '2026-09-17 19:30:00', 6, 45, 7.50, 1, 'SUBMITTED');
+INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `completed_at`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (5, 'R20260918001', 8, 9, 'RECURVE', '2026-09-18 20:15:00', '2026-09-18 20:15:00', 12, 109, 9.08, 1, 'SUBMITTED');
+INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `completed_at`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (6, 'R20260919001', 1, 10, 'RECURVE', '2026-09-19 19:00:00', '2026-09-19 19:00:00', 6, 58, 9.67, 0, 'SUBMITTED');
+INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `completed_at`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (7, 'R20260920001', 9, 8, 'COMPOUND', '2026-09-20 18:20:00', '2026-09-20 18:20:00', 6, 37, 6.17, 1, 'SUBMITTED');
+INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `completed_at`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (8, 'R20260920002', 11, 7, 'COMPOUND', '2026-09-20 20:30:00', '2026-09-20 20:30:00', 12, 104, 8.67, 1, 'SUBMITTED');
+INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `completed_at`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (9, 'R20260921001', 4, 12, 'COMPOUND', '2026-09-21 19:45:00', '2026-09-21 19:45:00', 6, 59, 9.83, 0, 'SUBMITTED');
+INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `completed_at`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (10, 'R20260922001', 3, 2, 'RECURVE', '2026-09-22 10:20:00', NULL, 6, 0, 0.00, 0, 'ONGOING');
+INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `completed_at`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (11, 'R20260922002', 7, 7, 'COMPOUND', '2026-09-22 13:05:00', NULL, 12, 0, 0.00, 0, 'ONGOING');
+INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `completed_at`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (12, 'R20260922003', 5, 8, 'RECURVE', '2026-09-22 15:40:00', NULL, 6, 0, 0.00, 0, 'ONGOING');
 -- 历史回合：会员 2 去年的传统弓 18 米训练，用于一笔已过期认证的证据
-INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (13, 'R20250910001', 2, 3, 'TRADITIONAL', '2025-09-10 19:00:00', 6, 40, 6.67, 0, 'SUBMITTED');
+INSERT INTO rounds (`id`, `round_no`, `member_id`, `lane_id`, `bow_type`, `start_time`, `completed_at`, `arrow_count`, `total_score`, `average_score`, `personal_best`, `status`) VALUES (13, 'R20250910001', 2, 3, 'TRADITIONAL', '2025-09-10 19:00:00', '2025-09-10 19:00:00', 6, 40, 6.67, 0, 'SUBMITTED');
 
 -- arrow_score：72 行
 INSERT INTO arrow_score (`id`, `ring`, `ring_value`) VALUES (1, 'X', 10);
