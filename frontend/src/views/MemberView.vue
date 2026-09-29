@@ -39,17 +39,18 @@
             <span v-else class="muted">无</span>
           </template>
         </el-table-column>
-        <el-table-column label="回合 / 最好成绩" min-width="150">
+        <el-table-column label="回合 / 个人最好" min-width="170">
           <template #default="{ row }">
             {{ row.roundCount }} 个回合
-            <span v-if="row.bestScore" class="best">最高 {{ row.bestScore }} 环</span>
-            <span v-else class="muted">暂无成绩</span>
+            <span v-if="row.personalBestCount > 0" class="best">{{ row.personalBestCount }} 个可比组别个人最好</span>
+            <span v-else class="muted">暂无最好成绩</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" width="230" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openRecharge(row)">充值</el-button>
             <el-button link type="success" @click="openCerts(row)">认证</el-button>
+            <el-button link type="warning" @click="openRounds(row)">成绩</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -134,13 +135,83 @@
         </el-table>
       </div>
     </el-dialog>
+
+    <!-- 个人成绩：按可比组别（会员 + 弓种 + 射距 + 箭数）分组，每组标出当前个人最好 -->
+    <el-dialog v-model="roundsVisible" :title="`个人成绩 · ${roundsPick ? roundsPick.name : ''}`" width="860px">
+      <div v-loading="roundsLoading">
+        <div class="rule-tip rounds-tip">
+          个人最好按可比组别独立计算（会员 · 弓种 · 射距 · 规定箭数）：6 支与 12 支、不同弓种或射距互不比较，
+          同分时保留最早完成的回合。
+        </div>
+        <div v-if="roundGroups.length" class="round-groups">
+          <div v-for="g in roundGroups" :key="g.key" class="round-group">
+            <div class="round-group-head">
+              <b>{{ g.label }}</b>
+              <span class="muted">{{ g.rounds.length }} 个完成回合</span>
+            </div>
+            <el-table :data="g.rounds" size="small" border>
+              <el-table-column prop="roundNo" label="回合号" width="130" />
+              <el-table-column prop="totalScore" label="总分" width="70" />
+              <el-table-column label="平均环" width="80">
+                <template #default="{ row }">{{ Number(row.averageScore).toFixed(2) }}</template>
+              </el-table-column>
+              <el-table-column label="完成时间" width="120">
+                <template #default="{ row }">{{ shortTime(row.startTime) }}</template>
+              </el-table-column>
+              <el-table-column label="标记" width="150">
+                <template #default="{ row }">
+                  <el-tag v-if="row.personalBest" size="small" type="danger" effect="dark">当前个人最好</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="箭支明细" width="110">
+                <template #default="{ row }">
+                  <el-button link type="primary" @click="showArrows(row)">查看箭支</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </div>
+        <el-empty v-else-if="!roundsLoading" description="暂无可比组别的完成回合" :image-size="60" />
+
+        <template v-if="excludedRounds.length">
+          <div class="cert-section-title">不参与比较的回合（{{ excludedRounds.length }}）</div>
+          <el-table :data="excludedRounds" size="small" border max-height="220">
+            <el-table-column prop="roundNo" label="回合号" width="130" />
+            <el-table-column label="组别 / 进度" min-width="180">
+              <template #default="{ row }">
+                {{ row.groupLabel }} · {{ row.shotCount }}/{{ row.arrowCount }} 支
+              </template>
+            </el-table-column>
+            <el-table-column prop="statusName" label="状态" width="90" />
+            <el-table-column prop="exclusionReasonName" label="原因" min-width="200" />
+          </el-table>
+        </template>
+      </div>
+    </el-dialog>
+
+    <!-- 单个回合的完整箭支明细（shot_index 顺序） -->
+    <el-dialog v-model="arrowsVisible" :title="`箭支明细 · ${arrowsRound ? arrowsRound.roundNo : ''}`" width="640px">
+      <template v-if="arrowsRound">
+        <div class="arrows-meta muted">
+          {{ arrowsRound.groupLabel }} · 总分 {{ arrowsRound.totalScore }} ·
+          {{ Number(arrowsRound.averageScore).toFixed(2) }} 平均环
+          <el-tag v-if="arrowsRound.personalBest" size="small" type="danger" effect="dark" class="pb-tag">当前个人最好</el-tag>
+        </div>
+        <div class="expand-box arrows-box">
+          <span v-for="arrow in arrowsDetail" :key="arrow.shotIndex" class="arrow-item">
+            <span class="ring-chip" :class="arrowChipClass(arrow.ring)">{{ arrow.ring }}</span>
+            <em class="muted">第 {{ arrow.shotIndex }} 支 · {{ arrow.ringValue }} 环</em>
+          </span>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { certApi, memberApi, money, shortDate } from '../api'
+import { certApi, memberApi, money, roundApi, shortDate, shortTime } from '../api'
 
 const members = ref([])
 const createVisible = ref(false)
@@ -152,6 +223,15 @@ const certPick = ref(null)
 const rechargeAmount = ref(200)
 const certData = ref({ current: [], history: [] })
 const createForm = reactive({ cardNo: '', name: '', phone: '', level: 'NORMAL', balance: 200 })
+
+// 个人成绩（按可比组别分组）
+const roundsVisible = ref(false)
+const roundsLoading = ref(false)
+const roundsPick = ref(null)
+const memberRounds = ref([])
+const arrowsVisible = ref(false)
+const arrowsRound = ref(null)
+const arrowsDetail = ref([])
 
 function levelType(level) {
   if (level === 'GOLD') return 'warning'
@@ -172,6 +252,51 @@ function certStatusType(status) {
 }
 
 const fmtTime = (value) => (value ? String(value).slice(0, 16) : '')
+
+/** 仅把可参与比较的完成回合按可比组别归集，组内按完成时间升序（同分保留最早） */
+const roundGroups = computed(() => {
+  const map = new Map()
+  for (const r of memberRounds.value) {
+    if (!r.eligible || !r.groupKey) continue
+    if (!map.has(r.groupKey)) {
+      map.set(r.groupKey, { key: r.groupKey, label: r.groupLabel, rounds: [] })
+    }
+    map.get(r.groupKey).rounds.push(r)
+  }
+  return [...map.values()].map((g) => ({
+    ...g,
+    rounds: g.rounds.slice().sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)) || a.id - b.id)
+  }))
+})
+
+/** 不参与比较的回合：进行中 / 暂停 / 箭数不完整 / 射距或关联对象缺失等，保留成绩但明确列出 */
+const excludedRounds = computed(() => memberRounds.value.filter((r) => !r.eligible))
+
+async function openRounds(row) {
+  roundsPick.value = row
+  roundsVisible.value = true
+  roundsLoading.value = true
+  memberRounds.value = []
+  try {
+    memberRounds.value = await roundApi.list({ memberId: row.id })
+  } finally {
+    roundsLoading.value = false
+  }
+}
+
+async function showArrows(row) {
+  const detail = await roundApi.detail(row.id)
+  arrowsRound.value = row
+  arrowsDetail.value = detail.arrows
+  arrowsVisible.value = true
+}
+
+function arrowChipClass(ring) {
+  if (ring === 'X') return 'is-x'
+  if (ring === '10') return 'is-ten'
+  if (ring === 'M') return 'is-miss'
+  return ''
+}
 
 async function loadMembers() {
   members.value = await memberApi.list()
@@ -255,5 +380,62 @@ onMounted(loadMembers)
   align-items: center;
   justify-content: space-between;
   margin-bottom: 2px;
+}
+
+.rounds-tip {
+  margin-bottom: 12px;
+}
+
+.round-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.round-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.arrows-meta {
+  margin-bottom: 10px;
+}
+
+.pb-tag {
+  margin-left: 8px;
+}
+
+.arrows-box {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.arrows-box .ring-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.arrows-box .ring-chip.is-x {
+  background: linear-gradient(135deg, #00695c, #26a69a);
+  color: #fff;
+}
+
+.arrows-box .ring-chip.is-ten {
+  background: #fff6d8;
+  color: #8a6100;
+}
+
+.arrows-box .ring-chip.is-miss {
+  background: #f1f3f4;
+  color: #98a3a8;
 }
 </style>

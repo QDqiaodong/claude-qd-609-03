@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS rounds (
   round_no      VARCHAR(24)  NOT NULL COMMENT '回合号',
   member_id     BIGINT       NOT NULL,
   lane_id       BIGINT       NOT NULL,
-  bow_type      VARCHAR(16)  NOT NULL DEFAULT 'RECURVE' COMMENT '本回合弓种：RECURVE 反曲弓 / COMPOUND 复合弓 / TRADITIONAL 传统弓',
+  bow_type      VARCHAR(16)  NULL DEFAULT 'RECURVE' COMMENT '本回合弓种：RECURVE 反曲弓 / COMPOUND 复合弓 / TRADITIONAL 传统弓；历史旧数据可能为空，按默认 RECURVE 兼容',
   start_time    DATETIME     NOT NULL COMMENT '开始时间',
   arrow_count   INT          NOT NULL COMMENT '本组箭支数：6 或 12',
   total_score   INT          NOT NULL COMMENT '总分',

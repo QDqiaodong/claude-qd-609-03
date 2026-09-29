@@ -37,6 +37,7 @@ public class StatsService {
     private final TournamentRepository tournamentRepository;
     private final CertApplicationRepository certApplicationRepository;
     private final RoundService roundService;
+    private final RoundViewMapper roundViewMapper;
 
     public StatsService(LaneRepository laneRepository,
             MemberRepository memberRepository,
@@ -47,7 +48,8 @@ public class StatsService {
             SafetyEventRepository safetyEventRepository,
             TournamentRepository tournamentRepository,
             CertApplicationRepository certApplicationRepository,
-            RoundService roundService) {
+            RoundService roundService,
+            RoundViewMapper roundViewMapper) {
         this.laneRepository = laneRepository;
         this.memberRepository = memberRepository;
         this.roundRepository = roundRepository;
@@ -58,6 +60,7 @@ public class StatsService {
         this.tournamentRepository = tournamentRepository;
         this.certApplicationRepository = certApplicationRepository;
         this.roundService = roundService;
+        this.roundViewMapper = roundViewMapper;
     }
 
     @Transactional(readOnly = true)
@@ -81,11 +84,12 @@ public class StatsService {
         counters.put("tournamentTotal", tournamentRepository.count());
         counters.put("tournamentOngoing", tournamentRepository.countByStatus("ONGOING"));
 
+        // 成绩榜只做总榜展示；个人最好按可比组别（会员 + 弓种 + 射距 + 箭数）独立计算，不与本榜混用
         List<RoundDtos.RoundView> top = roundRepository.findByStatusOrderByStartTimeDesc("SUBMITTED").stream()
                 .sorted(Comparator.comparingInt((com.archery.range.domain.Round r) ->
                         r.getTotalScore() == null ? 0 : r.getTotalScore()).reversed())
                 .limit(5)
-                .map(this::toView)
+                .map(roundViewMapper::toView)
                 .toList();
 
         Map<String, Object> board = new LinkedHashMap<>();
@@ -95,27 +99,5 @@ public class StatsService {
         board.put("keypadRings", RangeDict.KEYPAD_RINGS);
         board.put("groupSizes", RangeDict.GROUP_SIZES);
         return board;
-    }
-
-    private RoundDtos.RoundView toView(com.archery.range.domain.Round round) {
-        return new RoundDtos.RoundView(
-                round.getId(),
-                round.getRoundNo(),
-                round.getMember() == null ? null : round.getMember().getId(),
-                round.getMember() == null ? "" : round.getMember().getName(),
-                round.getMember() == null ? "" : round.getMember().getCardNo(),
-                round.getLane() == null ? null : round.getLane().getId(),
-                round.getLane() == null ? "" : round.getLane().getLaneNo(),
-                round.getLane() == null ? null : round.getLane().getDistance(),
-                round.getBowType(),
-                RangeDict.bowTypeName(round.getBowType()),
-                round.getStartTime(),
-                round.getArrowCount(),
-                round.getArrows().size(),
-                round.getTotalScore(),
-                round.getAverageScore(),
-                round.getPersonalBest(),
-                round.getStatus(),
-                RangeDict.roundStatusName(round.getStatus()));
     }
 }

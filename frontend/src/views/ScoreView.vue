@@ -80,9 +80,9 @@
                 <el-tag size="small" :type="roundTagType(current.round.status)" effect="dark">
                   {{ current.round.statusName }}
                 </el-tag>
-                <el-tag v-if="current.round.personalBest" size="small" type="danger" effect="dark">个人最好成绩</el-tag>
+                <el-tag v-if="current.round.personalBest" size="small" type="danger" effect="dark">本组个人最好</el-tag>
               </div>
-              <div class="muted">{{ shortTime(current.round.startTime) }} · {{ current.round.bowTypeName }} · {{ current.round.distance }}米</div>
+              <div class="muted">{{ shortTime(current.round.startTime) }} · {{ current.round.groupLabel }}</div>
             </div>
 
             <div v-if="current.round.status === 'PAUSED'" class="pause-tip">
@@ -135,7 +135,13 @@
 
     <!-- 历史回合 -->
     <div class="panel">
-      <div class="panel-title">历史回合 <small>展开看每支箭的环数明细</small></div>
+      <div class="panel-title">
+        历史回合
+        <small>按可比组别（会员 · 弓种 · 射距 · 箭数）各自比较 · 展开看每支箭的环数明细</small>
+        <el-button class="repair-btn" size="small" type="warning" plain :loading="repairing" @click="runRepair">
+          重算历史个人最好
+        </el-button>
+      </div>
       <el-table :data="rounds" row-key="id" @expand-change="onExpand">
         <el-table-column type="expand">
           <template #default="{ row }">
@@ -150,38 +156,61 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="roundNo" label="回合号" width="150" />
-        <el-table-column prop="memberName" label="会员" width="110" />
-        <el-table-column label="箭道" width="110">
-          <template #default="{ row }">{{ row.laneNo }} · {{ row.distance }}m</template>
-        </el-table-column>
-        <el-table-column label="弓种" width="90">
+        <el-table-column prop="roundNo" label="回合号" width="140" />
+        <el-table-column prop="memberName" label="会员" width="90" />
+        <el-table-column label="可比组别" min-width="210">
           <template #default="{ row }">
-            <el-tag size="small" effect="plain">{{ row.bowTypeName }}</el-tag>
+            <span class="group-label">{{ row.groupLabel }}</span>
+            <el-tag v-if="row.personalBest" size="small" type="danger" effect="dark" class="pb-tag">本组个人最好</el-tag>
+            <el-tooltip v-if="!row.eligible" :content="row.exclusionReasonName || '不参与个人最好比较'" placement="top">
+              <el-tag size="small" type="info" effect="plain" class="pb-tag">不参与比较</el-tag>
+            </el-tooltip>
           </template>
         </el-table-column>
-        <el-table-column prop="startTime" label="开始时间" width="150" :formatter="(r) => shortTime(r.startTime)" />
-        <el-table-column label="箭支" width="90">
+        <el-table-column label="箭道" width="100">
+          <template #default="{ row }">{{ row.laneNo }} · {{ row.distance }}m</template>
+        </el-table-column>
+        <el-table-column prop="startTime" label="开始时间" width="140" :formatter="(r) => shortTime(r.startTime)" />
+        <el-table-column label="箭支" width="80">
           <template #default="{ row }">{{ row.shotCount }} / {{ row.arrowCount }}</template>
         </el-table-column>
-        <el-table-column prop="totalScore" label="总分" width="80" />
-        <el-table-column label="平均环" width="90">
+        <el-table-column prop="totalScore" label="总分" width="70" />
+        <el-table-column label="平均环" width="80">
           <template #default="{ row }">{{ Number(row.averageScore).toFixed(2) }}</template>
         </el-table-column>
-        <el-table-column label="状态" width="110">
+        <el-table-column label="状态" width="100">
           <template #default="{ row }">
             <el-tag size="small" :type="roundTagType(row.status)" effect="plain">
               {{ row.statusName }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" min-width="150">
+        <el-table-column label="操作" width="120">
           <template #default="{ row }">
             <el-button link type="primary" @click="pickRound(row.id)">载入到键盘</el-button>
-            <el-tag v-if="row.personalBest" size="small" type="danger" effect="dark">PB</el-tag>
           </template>
         </el-table-column>
       </el-table>
+      <div v-if="repairReport" class="repair-report">
+        <div class="repair-summary">
+          最近一次修复：共 {{ repairReport.totalRounds }} 个回合，{{ repairReport.groupCount }} 个可比组别，
+          个人最好 {{ repairReport.personalBestCount }} 条；本次翻转标记 {{ repairReport.changedMarks }} 个
+          （重复执行为 0 即结果已稳定），{{ repairReport.excludedCount }} 个回合不参与比较。
+        </div>
+        <el-table v-if="repairReport.excludedRounds && repairReport.excludedRounds.length"
+          :data="repairReport.excludedRounds" size="small" border max-height="240">
+          <el-table-column prop="roundNo" label="回合号" width="140" />
+          <el-table-column prop="memberName" label="会员" width="90" />
+          <el-table-column label="弓种 / 射距 / 箭数" min-width="170">
+            <template #default="{ row }">
+              {{ row.bowTypeName || '弓种未知' }} · {{ row.distance == null ? '射距未知' : row.distance + 'm' }}
+              · {{ row.shotCount }}/{{ row.arrowCount }} 支
+            </template>
+          </el-table-column>
+          <el-table-column prop="statusName" label="状态" width="90" />
+          <el-table-column prop="exclusionReasonName" label="不参与原因" min-width="200" />
+        </el-table>
+      </div>
     </div>
   </div>
 </template>
@@ -197,6 +226,8 @@ const lanes = ref([])
 const keypad = ref({ rings: [], groupSizes: [6, 12] })
 const current = ref(null)
 const details = reactive({})
+const repairing = ref(false)
+const repairReport = ref(null)
 
 const startForm = reactive({ memberId: null, laneId: null, arrowCount: 6, bowType: 'RECURVE' })
 
@@ -301,6 +332,23 @@ async function onExpand(row) {
   if (details[row.id]) return
   const detail = await roundApi.detail(row.id)
   details[row.id] = detail.arrows
+}
+
+/** 历史修复：按可比组别重算个人最好标记（幂等，可重复执行） */
+async function runRepair() {
+  repairing.value = true
+  try {
+    repairReport.value = await roundApi.repairPersonalBests()
+    ElMessage.success(
+      `重算完成：${repairReport.value.personalBestCount} 条个人最好，翻转 ${repairReport.value.changedMarks} 个标记`
+    )
+    await loadRounds()
+    if (current.value) {
+      current.value = await roundApi.detail(current.value.round.id)
+    }
+  } finally {
+    repairing.value = false
+  }
 }
 
 onMounted(async () => {
@@ -517,6 +565,30 @@ onMounted(async () => {
   flex-direction: column;
   align-items: center;
   gap: 2px;
+}
+
+.group-label {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.pb-tag {
+  margin-left: 6px;
+}
+
+.repair-btn {
+  margin-left: auto;
+}
+
+.repair-report {
+  margin-top: 12px;
+}
+
+.repair-summary {
+  font-size: 12px;
+  color: var(--ink-mute);
+  margin-bottom: 8px;
+  line-height: 1.7;
 }
 
 @media (max-width: 1100px) {

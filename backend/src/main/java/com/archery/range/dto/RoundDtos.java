@@ -50,10 +50,51 @@ public final class RoundDtos {
             BigDecimal averageScore,
             Boolean personalBest,
             String status,
-            String statusName) {
+            String statusName,
+            // 个人最好比较口径：可比组别（会员 + 弓种 + 射距 + 规定箭数）与参与资格
+            String groupKey,
+            String groupLabel,
+            Boolean eligible,
+            String exclusionReason,
+            String exclusionReasonName) {
     }
 
     /** 成绩单：回合 + 按 shot_index 顺序排好的每一支箭 */
     public record RoundDetailView(RoundView round, List<ArrowView> arrows) {
+    }
+
+    /** 历史修复中被排除在个人最好比较之外的回合：原始成绩保留，仅明确列出原因 */
+    public record ExcludedRoundView(
+            Long id,
+            String roundNo,
+            Long memberId,
+            String memberName,
+            Long laneId,
+            String laneNo,
+            String bowType,
+            String bowTypeName,
+            Integer distance,
+            Integer arrowCount,
+            Integer shotCount,
+            Integer totalScore,
+            String status,
+            String statusName,
+            LocalDateTime startTime,
+            String exclusionReason,
+            String exclusionReasonName) {
+    }
+
+    /**
+     * 个人最好历史修复报告：可重复执行（幂等）。
+     * 只改 personal_best 标记，changedMarks 为本轮真正翻转标记的回合数（稳态后为 0）。
+     */
+    public record PersonalBestRepairReport(
+            int totalRounds,
+            int eligibleRounds,
+            int groupCount,
+            int personalBestCount,
+            int excludedCount,
+            int changedMarks,
+            List<ExcludedRoundView> excludedRounds) {
     }
 }

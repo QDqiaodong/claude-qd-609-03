@@ -40,14 +40,19 @@ public class Round {
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "member_id", nullable = false)
+    @org.hibernate.annotations.NotFound(action = org.hibernate.annotations.NotFoundAction.IGNORE)
     private Member member;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "lane_id", nullable = false)
+    @org.hibernate.annotations.NotFound(action = org.hibernate.annotations.NotFoundAction.IGNORE)
     private Lane lane;
 
-    /** 本回合使用弓种：RECURVE 反曲弓 / COMPOUND 复合弓 / TRADITIONAL 传统弓（认证证据字段） */
-    @Column(name = "bow_type", nullable = false, length = 16)
+    /**
+     * 本回合使用弓种：RECURVE 反曲弓 / COMPOUND 复合弓 / TRADITIONAL 传统弓（认证证据字段）。
+     * 允许为空仅为兼容旧口径遗留数据：比较与展示时按系统原有默认弓种 RECURVE 归一化处理。
+     */
+    @Column(name = "bow_type", length = 16)
     private String bowType;
 
     @Column(name = "start_time", nullable = false)

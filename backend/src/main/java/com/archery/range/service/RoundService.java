@@ -37,26 +37,32 @@ public class RoundService {
     private final RoundRepository roundRepository;
     private final MemberRepository memberRepository;
     private final LaneRepository laneRepository;
+    private final RoundViewMapper viewMapper;
+    private final PersonalBestService personalBestService;
 
-    public RoundService(RoundRepository roundRepository, MemberRepository memberRepository, LaneRepository laneRepository) {
+    public RoundService(RoundRepository roundRepository, MemberRepository memberRepository,
+            LaneRepository laneRepository, RoundViewMapper viewMapper,
+            PersonalBestService personalBestService) {
         this.roundRepository = roundRepository;
         this.memberRepository = memberRepository;
         this.laneRepository = laneRepository;
+        this.viewMapper = viewMapper;
+        this.personalBestService = personalBestService;
     }
 
     @Transactional(readOnly = true)
     public List<RoundDtos.RoundView> list() {
-        return roundRepository.findAllByOrderByStartTimeDesc().stream().map(this::toView).toList();
+        return viewMapper.toViews(roundRepository.findAllByOrderByStartTimeDesc());
     }
 
     @Transactional(readOnly = true)
     public List<RoundDtos.RoundView> listByMember(Long memberId) {
-        return roundRepository.findByMemberIdOrderByStartTimeDesc(memberId).stream().map(this::toView).toList();
+        return viewMapper.toViews(roundRepository.findByMemberIdOrderByStartTimeDesc(memberId));
     }
 
     @Transactional(readOnly = true)
     public List<RoundDtos.RoundView> listByStatus(String status) {
-        return roundRepository.findByStatusOrderByStartTimeDesc(status).stream().map(this::toView).toList();
+        return viewMapper.toViews(roundRepository.findByStatusOrderByStartTimeDesc(status));
     }
 
     /** 成绩单：回合 + 按 shot_index 顺序排好的每一支箭 */
@@ -80,9 +86,7 @@ public class RoundService {
         if (!RangeDict.isValidGroupSize(req.arrowCount())) {
             throw new BizException("一组只能是 6 支或 12 支箭");
         }
-        String bowType = req.bowType() == null || req.bowType().isBlank()
-                ? "RECURVE"
-                : req.bowType().trim().toUpperCase();
+        String bowType = PersonalBestSupport.normalizeBowType(req.bowType());
         if (!RangeDict.isValidBowType(bowType)) {
             throw new BizException("弓种只能是 反曲弓 / 复合弓 / 传统弓");
         }
@@ -152,7 +156,9 @@ public class RoundService {
     }
 
     /**
-     * 提交回合：必须打满一组，提交时判定是否个人最好成绩。暂停态禁止提交。
+     * 提交回合：必须打满一组，提交时在「可比组别」内判定个人最好成绩。暂停态禁止提交。
+     * 可比组别 = 会员 + 弓种 + 射距 + 规定箭数：只与同组历史回合比较，
+     * 分数更高才替换旧标记并清除该组其他标记；同分保留最早完成的回合。
      */
     @Transactional
     public RoundDtos.RoundDetailView submit(Long id) {
@@ -164,15 +170,9 @@ public class RoundService {
         if (round.getArrows().size() < round.getArrowCount()) {
             throw new BizException("还差 " + (round.getArrowCount() - round.getArrows().size()) + " 支箭未打完，不能提交");
         }
-        int historyBest = roundRepository
-                .findByMemberIdAndStatusOrderByStartTimeDesc(round.getMember().getId(), "SUBMITTED")
-                .stream()
-                .filter(item -> !item.getId().equals(round.getId()))
-                .mapToInt(item -> item.getTotalScore() == null ? 0 : item.getTotalScore())
-                .max()
-                .orElse(0);
-        round.setPersonalBest(round.getTotalScore() > historyBest);
         round.setStatus("SUBMITTED");
+        // 只在同一可比组别内重算：新高分替换、同分保留最早回合，进行中 / 暂停 / 不完整回合被排除
+        personalBestService.refreshGroup(round);
         return toDetail(roundRepository.save(round));
     }
 
@@ -216,25 +216,7 @@ public class RoundService {
     }
 
     private RoundDtos.RoundView toView(Round round) {
-        return new RoundDtos.RoundView(
-                round.getId(),
-                round.getRoundNo(),
-                round.getMember() == null ? null : round.getMember().getId(),
-                round.getMember() == null ? "" : round.getMember().getName(),
-                round.getMember() == null ? "" : round.getMember().getCardNo(),
-                round.getLane() == null ? null : round.getLane().getId(),
-                round.getLane() == null ? "" : round.getLane().getLaneNo(),
-                round.getLane() == null ? null : round.getLane().getDistance(),
-                round.getBowType(),
-                RangeDict.bowTypeName(round.getBowType()),
-                round.getStartTime(),
-                round.getArrowCount(),
-                round.getArrows().size(),
-                round.getTotalScore(),
-                round.getAverageScore(),
-                round.getPersonalBest(),
-                round.getStatus(),
-                RangeDict.roundStatusName(round.getStatus()));
+        return viewMapper.toView(round);
     }
 
     private RoundDtos.RoundDetailView toDetail(Round round) {

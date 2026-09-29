@@ -104,11 +104,9 @@ public class MemberService {
     }
 
     private MemberDtos.MemberView toView(Member member) {
-        int best = roundRepository.findByMemberIdAndStatusOrderByStartTimeDesc(member.getId(), "SUBMITTED")
-                .stream()
-                .mapToInt(r -> r.getTotalScore() == null ? 0 : r.getTotalScore())
-                .max()
-                .orElse(0);
+        // 个人最好按可比组别（会员 + 弓种 + 射距 + 箭数）独立计算，这里只统计该会员持有的最好组数；
+        // 不再把 6 支 / 12 支等不同组别的总分混在一起取最高
+        int personalBestCount = (int) roundRepository.countByMemberIdAndPersonalBestTrue(member.getId());
         // 当前有效认证：已通过且未过期（撤回 / 被取代 / 过期均不计）
         int validCertCount = certApplicationRepository
                 .findByMemberIdAndStatusAndValidUntilGreaterThanEqualOrderByValidUntilDesc(
@@ -126,7 +124,7 @@ public class MemberService {
                 member.getTotalSpend(),
                 RangeDict.memberDiscount(member.getLevel()),
                 roundRepository.countByMemberId(member.getId()),
-                best,
+                personalBestCount,
                 validCertCount);
     }
 }

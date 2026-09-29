@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.archery.range.common.ApiResponse;
 import com.archery.range.domain.RangeDict;
 import com.archery.range.dto.RoundDtos;
+import com.archery.range.service.PersonalBestService;
 import com.archery.range.service.RoundService;
 
 import jakarta.validation.Valid;
@@ -30,9 +31,11 @@ import jakarta.validation.Valid;
 public class RoundController {
 
     private final RoundService roundService;
+    private final PersonalBestService personalBestService;
 
-    public RoundController(RoundService roundService) {
+    public RoundController(RoundService roundService, PersonalBestService personalBestService) {
         this.roundService = roundService;
+        this.personalBestService = personalBestService;
     }
 
     @GetMapping("/rounds")
@@ -71,10 +74,19 @@ public class RoundController {
         return ApiResponse.success("已撤销最后一支箭", roundService.undo(id));
     }
 
-    /** 打满一组后提交，判定个人最好成绩 */
+    /** 打满一组后提交，按可比组别判定个人最好成绩 */
     @PostMapping("/rounds/{id}/submit")
     public ApiResponse<RoundDtos.RoundDetailView> submit(@PathVariable Long id) {
         return ApiResponse.success("回合已提交", roundService.submit(id));
+    }
+
+    /**
+     * 历史修复：按完成时间重算每个可比组别（会员 + 弓种 + 射距 + 箭数）的个人最好标记。
+     * 只改 personal_best，可重复执行、结果幂等；报告明确列出无法参与比较的异常回合。
+     */
+    @PostMapping("/rounds/personal-bests/repair")
+    public ApiResponse<RoundDtos.PersonalBestRepairReport> repairPersonalBests() {
+        return ApiResponse.success("个人最好成绩已按可比组别重算", personalBestService.repairAll());
     }
 
     /** 计分键盘配置：环数键 + 可选的每组箭支数 */

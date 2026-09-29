@@ -52,7 +52,9 @@ export const roundApi = {
   detail: (id) => http.get(`/rounds/${id}`),
   shoot: (id, ring) => http.post(`/rounds/${id}/shots`, { ring }),
   undo: (id) => http.post(`/rounds/${id}/undo`),
-  submit: (id) => http.post(`/rounds/${id}/submit`)
+  submit: (id) => http.post(`/rounds/${id}/submit`),
+  /** 历史修复：按可比组别（会员 + 弓种 + 射距 + 箭数）重算个人最好标记，可重复执行 */
+  repairPersonalBests: () => http.post('/rounds/personal-bests/repair')
 }
 
 /** 模块四：课程预约 */
